@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+data/pdfs/*
+!data/pdfs/.gitkeep
+data/markdown/*
+!data/markdown/.gitkeep
+data/*.db
+*.db-journal
