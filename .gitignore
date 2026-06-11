@@ -8,5 +8,6 @@ data/pdfs/*
 !data/pdfs/.gitkeep
 data/markdown/*
 !data/markdown/.gitkeep
+data/markdown-inscripcion/*
 data/*.db
 *.db-journal

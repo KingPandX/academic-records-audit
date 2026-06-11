@@ -5,6 +5,8 @@ from pathlib import Path
 
 DEFAULT_PDF_DIR = Path("data/pdfs")
 DEFAULT_MD_DIR = Path("data/markdown")
+DEFAULT_INSCRIPCION_DIR = Path("data/inscripcion")
+DEFAULT_INSCRIPCION_MD_DIR = Path("data/markdown-inscripcion")
 DEFAULT_DB_PATH = Path("data/audit.db")
 
 
@@ -12,14 +14,18 @@ DEFAULT_DB_PATH = Path("data/audit.db")
 class Paths:
     pdf_dir: Path = DEFAULT_PDF_DIR
     markdown_dir: Path = DEFAULT_MD_DIR
-    db_path: Path = DEFAULT_DB_PATH
+    inscripcion_dir: Path = DEFAULT_INSCRIPCION_DIR
+    inscripcion_md_dir: Path = DEFAULT_INSCRIPCION_MD_DIR
+    db_path: Path | None = None
 
     def resolve(self, base: Path | None = None) -> Paths:
         root = base or Path.cwd()
         return Paths(
             pdf_dir=(root / self.pdf_dir).resolve(),
             markdown_dir=(root / self.markdown_dir).resolve(),
-            db_path=(root / self.db_path).resolve(),
+            inscripcion_dir=(root / self.inscripcion_dir).resolve(),
+            inscripcion_md_dir=(root / self.inscripcion_md_dir).resolve(),
+            db_path=(root / self.db_path).resolve() if self.db_path else None,
         )
 
 

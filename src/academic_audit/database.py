@@ -82,6 +82,35 @@ CREATE INDEX IF NOT EXISTS idx_courses_document ON courses(document_id);
 CREATE INDEX IF NOT EXISTS idx_courses_code ON courses(code);
 CREATE INDEX IF NOT EXISTS idx_fields_document ON document_fields(document_id);
 CREATE INDEX IF NOT EXISTS idx_index_snapshots_document ON academic_index_snapshots(document_id);
+
+CREATE TABLE IF NOT EXISTS enrollments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_pdf TEXT NOT NULL UNIQUE,
+    markdown_path TEXT,
+    filename TEXT NOT NULL,
+    content_hash TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error_message TEXT,
+    processed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    identity_document TEXT UNIQUE,
+    full_name TEXT,
+    period TEXT,
+    program TEXT
+);
+
+CREATE TABLE IF NOT EXISTS enrollment_subjects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    enrollment_id INTEGER NOT NULL,
+    code TEXT,
+    name TEXT NOT NULL,
+    section TEXT,
+    teacher TEXT,
+    row_order INTEGER,
+    FOREIGN KEY (enrollment_id) REFERENCES enrollments(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrollments_identity ON enrollments(identity_document);
+CREATE INDEX IF NOT EXISTS idx_enrollment_subjects_enrollment ON enrollment_subjects(enrollment_id);
 """
 
 # Columnas añadidas tras la versión inicial del esquema
@@ -103,17 +132,43 @@ _COURSE_COLUMNS = (
     ("student_id", "TEXT"),
 )
 
+_ENROLLMENT_COLUMNS = (
+    ("identity_document", "TEXT"),
+    ("full_name", "TEXT"),
+    ("period", "TEXT"),
+    ("program", "TEXT"),
+)
+
 
 class Database:
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, path: Path | None = None, *, memory: bool | None = None) -> None:
+        if memory is None:
+            memory = path is None
+        self._memory = memory
+        self._conn: sqlite3.Connection | None = None
+        if memory:
+            self.path = Path(":memory:")
+        else:
+            assert path is not None
+            self.path = path
+            self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
+    def _get_conn(self) -> sqlite3.Connection:
+        if self._memory:
+            if self._conn is None:
+                conn = sqlite3.connect(":memory:")
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA foreign_keys = ON")
+                self._conn = conn
+            return self._conn
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+    @contextmanager
+    def connect(self) -> Iterator[sqlite3.Connection]:
+        conn = self._get_conn()
         try:
             yield conn
             conn.commit()
@@ -121,7 +176,8 @@ class Database:
             conn.rollback()
             raise
         finally:
-            conn.close()
+            if not self._memory:
+                conn.close()
 
     def init_schema(self) -> None:
         with self.connect() as conn:
@@ -168,6 +224,54 @@ class Database:
             )
             """
         )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS enrollments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_pdf TEXT NOT NULL UNIQUE,
+                markdown_path TEXT,
+                filename TEXT NOT NULL,
+                content_hash TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                error_message TEXT,
+                processed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                identity_document TEXT UNIQUE,
+                full_name TEXT,
+                period TEXT,
+                program TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS enrollment_subjects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                enrollment_id INTEGER NOT NULL,
+                code TEXT,
+                name TEXT NOT NULL,
+                section TEXT,
+                teacher TEXT,
+                row_order INTEGER,
+                FOREIGN KEY (enrollment_id) REFERENCES enrollments(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_enrollments_identity ON enrollments(identity_document)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_enrollment_subjects_enrollment ON enrollment_subjects(enrollment_id)"
+        )
+
+        existing_enrollments = {
+            row[1] for row in conn.execute("PRAGMA table_info(enrollments)")
+        }
+        for name, col_type in _ENROLLMENT_COLUMNS:
+            if name not in existing_enrollments:
+                conn.execute(f"ALTER TABLE enrollments ADD COLUMN {name} {col_type}")
 
     def upsert_document(
         self,
@@ -352,4 +456,76 @@ class Database:
                     VALUES (?, ?, ?)
                     """,
                     (document_id, key, str(value)),
+                )
+
+    def upsert_enrollment_document(
+        self,
+        *,
+        source_pdf: str,
+        filename: str,
+        content_hash: str | None,
+        status: str,
+        markdown_path: str | None = None,
+        error_message: str | None = None,
+    ) -> int:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO enrollments (source_pdf, filename, content_hash, status, markdown_path, error_message)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source_pdf) DO UPDATE SET
+                    filename = excluded.filename,
+                    content_hash = excluded.content_hash,
+                    status = excluded.status,
+                    markdown_path = excluded.markdown_path,
+                    error_message = excluded.error_message,
+                    processed_at = datetime('now')
+                """,
+                (source_pdf, filename, content_hash, status, markdown_path, error_message),
+            )
+            row = conn.execute(
+                "SELECT id FROM enrollments WHERE source_pdf = ?", (source_pdf,)
+            ).fetchone()
+            assert row is not None
+            return int(row["id"])
+
+    def save_enrollment(
+        self,
+        enrollment_id: int,
+        *,
+        identity_document: str | None = None,
+        full_name: str | None = None,
+        period: str | None = None,
+        program: str | None = None,
+        subjects: list[dict[str, Any]] | None = None,
+    ) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE enrollments
+                SET identity_document = ?, full_name = ?, period = ?, program = ?
+                WHERE id = ?
+                """,
+                (identity_document, full_name, period, program, enrollment_id),
+            )
+
+            conn.execute(
+                "DELETE FROM enrollment_subjects WHERE enrollment_id = ?",
+                (enrollment_id,),
+            )
+
+            for order, subject in enumerate(subjects or [], start=1):
+                conn.execute(
+                    """
+                    INSERT INTO enrollment_subjects (enrollment_id, code, name, section, teacher, row_order)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        enrollment_id,
+                        subject.get("code"),
+                        subject.get("name"),
+                        subject.get("section"),
+                        subject.get("teacher"),
+                        order,
+                    ),
                 )

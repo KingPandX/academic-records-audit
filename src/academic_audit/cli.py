@@ -41,7 +41,19 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Carpeta de salida Markdown",
     )
     common.add_argument(
-        "--db", type=Path, default=Paths().db_path, help="Archivo SQLite"
+        "--db", type=Path, default=None, help="Archivo SQLite (persistir datos en disco)"
+    )
+    common.add_argument(
+        "--inscripcion-dir",
+        type=Path,
+        default=Paths().inscripcion_dir,
+        help="Carpeta con PDFs de inscripción",
+    )
+    common.add_argument(
+        "--inscripcion-md-dir",
+        type=Path,
+        default=Paths().inscripcion_md_dir,
+        help="Carpeta de salida Markdown de inscripción",
     )
     common.add_argument(
         "--no-recursive",
@@ -76,7 +88,9 @@ def _paths_from_args(args: argparse.Namespace) -> Paths:
     return Paths(
         pdf_dir=base / args.pdf_dir,
         markdown_dir=base / args.md_dir,
-        db_path=base / args.db,
+        inscripcion_dir=base / args.inscripcion_dir,
+        inscripcion_md_dir=base / args.inscripcion_md_dir,
+        db_path=base / args.db if args.db is not None else None,
     ).resolve()
 
 
@@ -94,14 +108,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "init-db":
+        if args.db is None:
+            print("init-db no es necesario en modo memoria (--db para persistir)")
+            return 0
         paths = _paths_from_args(args)
-        Database(paths.db_path).init_schema()
+        Database(paths.db_path, memory=False).init_schema()
         print(f"Base de datos inicializada: {paths.db_path}")
         return 0
 
     paths = _paths_from_args(args)
+    memory = args.db is None
     recursive = not args.no_recursive
-    db = Database(paths.db_path)
+    db = Database(paths.db_path, memory=memory)
 
     if args.command == "convert":
         convert_folder(paths.pdf_dir, paths.markdown_dir, db, recursive=recursive)
@@ -117,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run":
-        run_pipeline(paths, recursive=recursive)
+        run_pipeline(paths, recursive=recursive, memory=memory)
         return 0
 
     parser.print_help()
