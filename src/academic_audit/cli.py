@@ -56,6 +56,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Carpeta de salida Markdown de inscripción",
     )
     common.add_argument(
+        "--report",
+        action="store_true",
+        help="Generar reporte CSV al finalizar",
+    )
+    common.add_argument(
+        "--report-dir",
+        type=Path,
+        default=Paths().report_dir,
+        help="Directorio de salida para reportes",
+    )
+    common.add_argument(
+        "--workers",
+        type=int,
+        default=3,
+        help="Hilos paralelos para conversión PDF (default: 3)",
+    )
+    common.add_argument(
         "--no-recursive",
         action="store_true",
         help="No buscar en subcarpetas",
@@ -91,6 +108,7 @@ def _paths_from_args(args: argparse.Namespace) -> Paths:
         inscripcion_dir=base / args.inscripcion_dir,
         inscripcion_md_dir=base / args.inscripcion_md_dir,
         db_path=base / args.db if args.db is not None else None,
+        report_dir=base / args.report_dir,
     ).resolve()
 
 
@@ -119,24 +137,37 @@ def main(argv: list[str] | None = None) -> int:
     paths = _paths_from_args(args)
     memory = args.db is None
     recursive = not args.no_recursive
+    workers = args.workers
     db = Database(paths.db_path, memory=memory)
 
-    if args.command == "convert":
-        convert_folder(paths.pdf_dir, paths.markdown_dir, db, recursive=recursive)
-        return 0
+    try:
+        if args.command == "convert":
+            convert_folder(
+                paths.pdf_dir, paths.markdown_dir, db,
+                recursive=recursive, workers=workers,
+            )
+            return 0
 
-    if args.command == "extract":
-        extract_folder(
-            paths.markdown_dir,
-            db,
-            pdf_dir=paths.pdf_dir,
-            recursive=recursive,
-        )
-        return 0
+        if args.command == "extract":
+            extract_folder(
+                paths.markdown_dir,
+                db,
+                pdf_dir=paths.pdf_dir,
+                recursive=recursive,
+            )
+            return 0
 
-    if args.command == "run":
-        run_pipeline(paths, recursive=recursive, memory=memory)
-        return 0
+        if args.command == "run":
+            run_pipeline(
+                paths,
+                recursive=recursive,
+                memory=memory,
+                workers=workers,
+                report=args.report,
+            )
+            return 0
+    finally:
+        db.close()
 
     parser.print_help()
     return 1

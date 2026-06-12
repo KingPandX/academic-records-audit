@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -62,6 +63,7 @@ def convert_folder(
     db: Database,
     *,
     recursive: bool = True,
+    workers: int = 3,
 ) -> list[ConversionResult]:
     db.init_schema()
     pdfs = discover_pdfs(pdf_dir, recursive=recursive)
@@ -70,11 +72,23 @@ def convert_folder(
         return []
 
     converter = MarkItDown()
-    results: list[ConversionResult] = []
+    hashes: dict[int, str] = {}
+    results: list[ConversionResult | None] = [None] * len(pdfs)
 
-    for pdf_path in pdfs:
-        content_hash = _file_hash(pdf_path)
-        outcome = convert_pdf(pdf_path, markdown_dir, converter=converter)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {}
+        for i, pdf_path in enumerate(pdfs):
+            hashes[i] = _file_hash(pdf_path)
+            futures[executor.submit(convert_pdf, pdf_path, markdown_dir, converter)] = i
+
+        for future in as_completed(futures):
+            i = futures[future]
+            results[i] = future.result()
+
+    for i, outcome in enumerate(results):
+        assert outcome is not None
+        pdf_path = pdfs[i]
+        content_hash = hashes[i]
 
         if outcome.success and outcome.markdown_path:
             db.upsert_document(
@@ -93,8 +107,6 @@ def convert_folder(
                 error_message=outcome.error,
             )
 
-        results.append(outcome)
-
-    ok = sum(1 for r in results if r.success)
+    ok = sum(1 for r in results if r and r.success)
     logger.info("Conversión terminada: %d/%d exitosos", ok, len(results))
-    return results
+    return results  # type: ignore[return-value]

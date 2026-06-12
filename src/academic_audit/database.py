@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import sqlite3
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
@@ -145,30 +147,30 @@ class Database:
         if memory is None:
             memory = path is None
         self._memory = memory
-        self._conn: sqlite3.Connection | None = None
+        self._temp_path: Path | None = None
+
         if memory:
-            self.path = Path(":memory:")
+            fd, tmp = tempfile.mkstemp(suffix=".db")
+            os.close(fd)
+            self._temp_path = self.path = Path(tmp)
         else:
             assert path is not None
             self.path = path
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    def _get_conn(self) -> sqlite3.Connection:
-        if self._memory:
-            if self._conn is None:
-                conn = sqlite3.connect(":memory:")
-                conn.row_factory = sqlite3.Row
-                conn.execute("PRAGMA foreign_keys = ON")
-                self._conn = conn
-            return self._conn
-        conn = sqlite3.connect(self.path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+    def close(self) -> None:
+        if self._temp_path is not None:
+            try:
+                self._temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            self._temp_path = None
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = self._get_conn()
+        conn = sqlite3.connect(self.path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         try:
             yield conn
             conn.commit()
@@ -176,8 +178,7 @@ class Database:
             conn.rollback()
             raise
         finally:
-            if not self._memory:
-                conn.close()
+            conn.close()
 
     def init_schema(self) -> None:
         with self.connect() as conn:

@@ -9,6 +9,7 @@ from academic_audit.convert_inscripcion import convert_inscripcion_folder
 from academic_audit.database import Database
 from academic_audit.extract import extract_folder
 from academic_audit.extract_inscripcion import extract_inscripcion_folder
+from academic_audit.report import generate_reports
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,8 @@ def run_pipeline(
     *,
     recursive: bool = True,
     memory: bool = True,
+    workers: int = 3,
+    report: bool = False,
     config: ExtractorConfig | None = None,
 ) -> None:
     paths = paths.resolve()
@@ -30,26 +33,36 @@ def run_pipeline(
     logger.info("Markdown: %s", paths.markdown_dir)
     logger.info("Inscripción PDFs: %s", paths.inscripcion_dir)
     logger.info("Inscripción Markdown: %s", paths.inscripcion_md_dir)
-    logger.info("Base de datos: %s", paths.db_path or ":memory:")
+    logger.info("Base de datos: %s", paths.db_path or "tempfile")
 
-    convert_folder(paths.pdf_dir, paths.markdown_dir, db, recursive=recursive)
-    extract_folder(
-        paths.markdown_dir,
-        db,
-        pdf_dir=paths.pdf_dir,
-        recursive=recursive,
-        config=config,
-    )
+    try:
+        convert_folder(
+            paths.pdf_dir, paths.markdown_dir, db,
+            recursive=recursive, workers=workers,
+        )
+        extract_folder(
+            paths.markdown_dir,
+            db,
+            pdf_dir=paths.pdf_dir,
+            recursive=recursive,
+            config=config,
+        )
 
-    convert_inscripcion_folder(
-        paths.inscripcion_dir,
-        paths.inscripcion_md_dir,
-        db,
-        recursive=recursive,
-    )
-    extract_inscripcion_folder(
-        paths.inscripcion_md_dir,
-        db,
-        pdf_dir=paths.inscripcion_dir,
-        recursive=recursive,
-    )
+        convert_inscripcion_folder(
+            paths.inscripcion_dir,
+            paths.inscripcion_md_dir,
+            db,
+            recursive=recursive,
+            workers=workers,
+        )
+        extract_inscripcion_folder(
+            paths.inscripcion_md_dir,
+            db,
+            pdf_dir=paths.inscripcion_dir,
+            recursive=recursive,
+        )
+
+        if report:
+            generate_reports(db, paths.report_dir)
+    finally:
+        db.close()

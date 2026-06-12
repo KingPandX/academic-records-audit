@@ -8,6 +8,7 @@ DEFAULT_MD_DIR = Path("data/markdown")
 DEFAULT_INSCRIPCION_DIR = Path("data/inscripcion")
 DEFAULT_INSCRIPCION_MD_DIR = Path("data/markdown-inscripcion")
 DEFAULT_DB_PATH = Path("data/audit.db")
+DEFAULT_REPORT_DIR = Path("reports")
 
 
 @dataclass
@@ -17,6 +18,7 @@ class Paths:
     inscripcion_dir: Path = DEFAULT_INSCRIPCION_DIR
     inscripcion_md_dir: Path = DEFAULT_INSCRIPCION_MD_DIR
     db_path: Path | None = None
+    report_dir: Path = DEFAULT_REPORT_DIR
 
     def resolve(self, base: Path | None = None) -> Paths:
         root = base or Path.cwd()
@@ -26,6 +28,7 @@ class Paths:
             inscripcion_dir=(root / self.inscripcion_dir).resolve(),
             inscripcion_md_dir=(root / self.inscripcion_md_dir).resolve(),
             db_path=(root / self.db_path).resolve() if self.db_path else None,
+            report_dir=(root / self.report_dir).resolve(),
         )
 
 
