@@ -62,8 +62,88 @@ class StudentCoursesReport(ReportWriter):
             """).fetchall()
 
 
+class EligibilityReport(ReportWriter):
+    filename = "elegibilidad.csv"
+
+    @property
+    def columns(self) -> list[str]:
+        return [
+            "identity_document", "full_name", "program",
+            "student_id", "periodo_actual", "indice_academico",
+            "periodos_cursados", "materias_a_inscribir",
+            "prelaciones_incumplidas", "violaciones_art118",
+            "elegibilidad", "observaciones",
+        ]
+
+    def query_data(self, db: Database) -> list[dict[str, Any]]:
+        from academic_audit.eligibility import evaluate_student
+
+        current_period = db.get_parameter("periodo_actual") or ""
+
+        with db.connect() as conn:
+            enrollments = conn.execute(
+                """
+                SELECT DISTINCT e.identity_document, e.period
+                FROM enrollments e
+                WHERE e.identity_document IS NOT NULL
+                ORDER BY e.identity_document
+                """
+            ).fetchall()
+
+        if not enrollments:
+            with db.connect() as conn:
+                students = conn.execute(
+                    """
+                    SELECT DISTINCT s.identity_document
+                    FROM students s
+                    WHERE s.identity_document IS NOT NULL
+                    """
+                ).fetchall()
+            identities = [row["identity_document"] for row in students]
+        else:
+            identities = [row["identity_document"] for row in enrollments]
+
+        results: list[dict[str, Any]] = []
+        for id_doc in identities:
+            result = evaluate_student(db, id_doc, current_period)
+            if result is None:
+                continue
+
+            inscribir = "; ".join(result["enrollment_subjects"]) if result["enrollment_subjects"] else ""
+            prelaciones = "; ".join(result["prereq_issues"])
+            art118 = "; ".join(result["article_118_violations"])
+
+            observaciones: list[str] = []
+            if prelaciones:
+                observaciones.append(f"Prelaciones: {prelaciones}")
+            if art118:
+                observaciones.append(f"Art.118: {art118}")
+            if not result["is_eligible"] and not observaciones:
+                observaciones.append("No cumple requisitos")
+
+            results.append(
+                {
+                    "identity_document": result["identity_document"],
+                    "full_name": result["full_name"],
+                    "program": result["program"],
+                    "student_id": result["student_id"],
+                    "periodo_actual": result["current_period"],
+                    "indice_academico": result["academic_index"],
+                    "periodos_cursados": result["periods_completed"],
+                    "materias_a_inscribir": inscribir,
+                    "prelaciones_incumplidas": prelaciones,
+                    "violaciones_art118": art118,
+                    "elegibilidad": "APTO" if result["is_eligible"] else "NO APTO",
+                    "observaciones": " | ".join(observaciones),
+                }
+            )
+
+        return results
+
+
 REGISTRY: dict[str, type[ReportWriter]] = {
     "student_courses": StudentCoursesReport,
+    "eligibility": EligibilityReport,
 }
 
 

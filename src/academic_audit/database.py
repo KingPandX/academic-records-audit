@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
+from academic_audit.config import get_params_db_path
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,12 +144,40 @@ _ENROLLMENT_COLUMNS = (
 )
 
 
+PARAMS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS parameters (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS plan_subjects (
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    credits INTEGER,
+    semester TEXT,
+    program TEXT NOT NULL,
+    subject_type TEXT NOT NULL DEFAULT 'obligatoria',
+    PRIMARY KEY (code, program)
+);
+
+CREATE TABLE IF NOT EXISTS plan_prerequisites (
+    subject_code TEXT NOT NULL,
+    prereq_code TEXT NOT NULL,
+    program TEXT NOT NULL,
+    PRIMARY KEY (subject_code, prereq_code, program)
+);
+"""
+
+
 class Database:
     def __init__(self, path: Path | None = None, *, memory: bool | None = None) -> None:
         if memory is None:
             memory = path is None
         self._memory = memory
         self._temp_path: Path | None = None
+        self._params_path: Path | None = None
 
         if memory:
             fd, tmp = tempfile.mkstemp(suffix=".db")
@@ -157,6 +187,29 @@ class Database:
             assert path is not None
             self.path = path
             self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def params_path(self) -> Path:
+        if self._params_path is None:
+            p = get_params_db_path()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            self._params_path = p
+        return self._params_path
+
+    @contextmanager
+    def _params_connect(self) -> Iterator[sqlite3.Connection]:
+        conn = sqlite3.connect(self.params_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.executescript(PARAMS_SCHEMA)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def close(self) -> None:
         if self._temp_path is not None:
@@ -530,3 +583,111 @@ class Database:
                         order,
                     ),
                 )
+
+    def set_parameter(
+        self,
+        key: str,
+        value: str,
+        description: str | None = None,
+    ) -> None:
+        with self._params_connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO parameters (key, value, description)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    description = COALESCE(excluded.description, parameters.description),
+                    updated_at = datetime('now')
+                """,
+                (key, value, description),
+            )
+
+    def get_parameter(self, key: str) -> str | None:
+        with self._params_connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM parameters WHERE key = ?", (key,)
+            ).fetchone()
+            return str(row["value"]) if row else None
+
+    def get_all_parameters(self) -> list[dict[str, Any]]:
+        with self._params_connect() as conn:
+            rows = conn.execute(
+                "SELECT key, value, description, updated_at FROM parameters ORDER BY key"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def delete_parameter(self, key: str) -> bool:
+        with self._params_connect() as conn:
+            cur = conn.execute("DELETE FROM parameters WHERE key = ?", (key,))
+            return cur.rowcount > 0
+
+    def clear_plan(self, program: str) -> None:
+        with self._params_connect() as conn:
+            conn.execute(
+                "DELETE FROM plan_prerequisites WHERE program = ?", (program,)
+            )
+            conn.execute(
+                "DELETE FROM plan_subjects WHERE program = ?", (program,)
+            )
+
+    def import_plan_subjects(
+        self, subjects: list[dict[str, Any]], prerequisites: list[dict[str, str]]
+    ) -> None:
+        with self._params_connect() as conn:
+            for subj in subjects:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO plan_subjects
+                        (code, name, credits, semester, program, subject_type)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        subj["code"],
+                        subj["name"],
+                        subj.get("credits"),
+                        subj.get("semester"),
+                        subj["program"],
+                        subj.get("subject_type", "obligatoria"),
+                    ),
+                )
+            for prereq in prerequisites:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO plan_prerequisites
+                        (subject_code, prereq_code, program)
+                    VALUES (?, ?, ?)
+                    """,
+                    (prereq["subject_code"], prereq["prereq_code"], prereq["program"]),
+                )
+
+    def get_plan_subjects(self, program: str) -> list[dict[str, Any]]:
+        with self._params_connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT code, name, credits, semester, program, subject_type
+                FROM plan_subjects
+                WHERE program = ?
+                ORDER BY semester, code
+                """,
+                (program,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_prerequisites(self, code: str, program: str) -> list[str]:
+        with self._params_connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT prereq_code FROM plan_prerequisites
+                WHERE subject_code = ? AND program = ?
+                """,
+                (code, program),
+            ).fetchall()
+            return [row["prereq_code"] for row in rows]
+
+    def get_all_programs(self) -> list[str]:
+        with self._params_connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT program FROM plan_subjects ORDER BY program"
+            ).fetchall()
+            return [row["program"] for row in rows]

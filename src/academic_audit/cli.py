@@ -97,6 +97,40 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init-db", parents=[common], help="Crear esquema SQLite")
 
     sub.add_parser("version", help="Mostrar versión")
+
+    # ---  subcomando param  ---
+    param_parser = sub.add_parser(
+        "param",
+        help="Gestionar parámetros persistentes del sistema",
+    )
+    param_sub = param_parser.add_subparsers(dest="param_action", required=True)
+
+    p_set = param_sub.add_parser("set", help="Crear o actualizar un parámetro")
+    p_set.add_argument("key", help="Nombre del parámetro")
+    p_set.add_argument("value", help="Valor del parámetro")
+    p_set.add_argument("--description", help="Descripción del parámetro")
+
+    p_get = param_sub.add_parser("get", help="Obtener el valor de un parámetro")
+    p_get.add_argument("key", help="Nombre del parámetro")
+
+    p_list = param_sub.add_parser("list", help="Listar todos los parámetros")
+
+    p_delete = param_sub.add_parser("delete", help="Eliminar un parámetro")
+    p_delete.add_argument("key", help="Nombre del parámetro")
+
+    # ---  subcomando plan  ---
+    plan_parser = sub.add_parser(
+        "plan",
+        help="Gestionar planes de estudio (pensum)",
+    )
+    plan_sub = plan_parser.add_subparsers(dest="plan_action", required=True)
+
+    plan_import = plan_sub.add_parser("import", help="Importar plan de estudio desde XLS")
+    plan_import.add_argument("file", type=Path, help="Archivo .xls del pensum")
+
+    plan_list = plan_sub.add_parser("list", help="Listar programas importados")
+    plan_list.add_argument("--program", help="Filtrar por programa")
+
     return parser
 
 
@@ -123,6 +157,75 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "version":
         print(__version__)
+        return 0
+
+    if args.command == "param":
+        db = Database()
+        try:
+            if args.param_action == "set":
+                db.set_parameter(args.key, args.value, args.description)
+                print(f"Parámetro '{args.key}' = '{args.value}' guardado.")
+            elif args.param_action == "get":
+                value = db.get_parameter(args.key)
+                if value is not None:
+                    print(value)
+                else:
+                    print(f"Parámetro '{args.key}' no encontrado.")
+                    return 1
+            elif args.param_action == "list":
+                params = db.get_all_parameters()
+                if params:
+                    for p in params:
+                        desc = f" — {p['description']}" if p["description"] else ""
+                        print(f"{p['key']} = {p['value']}{desc}")
+                else:
+                    print("No hay parámetros configurados.")
+            elif args.param_action == "delete":
+                if db.delete_parameter(args.key):
+                    print(f"Parámetro '{args.key}' eliminado.")
+                else:
+                    print(f"Parámetro '{args.key}' no encontrado.")
+                    return 1
+        finally:
+            db.close()
+        return 0
+
+    if args.command == "plan":
+        from academic_audit.study_plan import parse_xls
+
+        db = Database()
+        try:
+            if args.plan_action == "import":
+                results = parse_xls(args.file)
+                for prog in results:
+                    db.clear_plan(prog["program"])
+                    db.import_plan_subjects(prog["subjects"], prog["prerequisites"])
+                    print(
+                        f"Importado: {prog['program']} "
+                        f"({len(prog['subjects'])} materias, "
+                        f"{len(prog['prerequisites'])} prelaciones)"
+                    )
+                print(f"\nTotal: {len(results)} programas importados.")
+            elif args.plan_action == "list":
+                if args.program:
+                    programs = [args.program]
+                else:
+                    programs = db.get_all_programs()
+                if not programs:
+                    print("No hay planes de estudio importados.")
+                    return 0
+                for prog in programs:
+                    subjects = db.get_plan_subjects(prog)
+                    if not subjects:
+                        print(f"{prog}: (no encontrado)")
+                        continue
+                    prereq_count = sum(
+                        len(db.get_prerequisites(s["code"], prog))
+                        for s in subjects
+                    )
+                    print(f"{prog}: {len(subjects)} materias, {prereq_count} prelaciones")
+        finally:
+            db.close()
         return 0
 
     if args.command == "init-db":

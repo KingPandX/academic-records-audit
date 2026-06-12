@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_PDF_DIR = Path("data/pdfs")
+
+
+def get_params_db_path() -> Path:
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    if config_home:
+        base = Path(config_home)
+    else:
+        base = Path.home() / ".config"
+    params_dir = base / "academic-audit"
+    return params_dir / "parameters.db"
 DEFAULT_MD_DIR = Path("data/markdown")
 DEFAULT_INSCRIPCION_DIR = Path("data/inscripcion")
 DEFAULT_INSCRIPCION_MD_DIR = Path("data/markdown-inscripcion")
