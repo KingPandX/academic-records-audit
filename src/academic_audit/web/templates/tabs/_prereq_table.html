@@ -1,0 +1,22 @@
+{% if prereqs %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Materia</th>
+        <th>Prelaci&oacute;n</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in prereqs %}
+      <tr>
+        <td>{{ p.subject }}</td>
+        <td>{{ p.prereq }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">Sin prelaciones para este programa</div>
+{% endif %}

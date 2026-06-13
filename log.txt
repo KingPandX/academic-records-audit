@@ -1,0 +1,33 @@
+INFO: HTTP Request: HEAD https://huggingface.co/api/telemetry/https%3A/api.gradio.app/gradio-initiated-analytics "HTTP/1.1 200 OK"
+INFO: HTTP Request: GET http://127.0.0.1:7860/gradio_api/startup-events "HTTP/1.1 200 OK"
+INFO: HTTP Request: HEAD http://127.0.0.1:7860/ "HTTP/1.1 200 OK"
+INFO: HTTP Request: HEAD https://huggingface.co/api/telemetry/https%3A/api.gradio.app/gradio-launched-telemetry "HTTP/1.1 200 OK"
+INFO: HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+INFO: PDFs: /home/ghost/Projects/academic-records-audit/data/pdfs
+INFO: Markdown: /home/ghost/Projects/academic-records-audit/data/markdown
+INFO: Inscripción PDFs: /home/ghost/Projects/academic-records-audit/data/inscripcion
+INFO: Inscripción Markdown: /home/ghost/Projects/academic-records-audit/data/markdown-inscripcion
+INFO: Base de datos: /home/ghost/Projects/academic-records-audit/data/audit.db
+INFO: Convertido: N-30162461.pdf → N-30162461.md (6018 caracteres)
+INFO: Conversión terminada: 1/1 exitosos
+INFO: Extraído N-30162461.md → document_id=1 (matrícula 2-2021-30162461): 50 cursos
+INFO: Extracción terminada: 1 documentos
+INFO: Convertido: constancia de inscripcion 1-2023.pdf → constancia de inscripcion 1-2023.md (2926 caracteres)
+INFO: Conversión de inscripciones terminada: 1/1 exitosos
+INFO: Extraído inscripción constancia de inscripcion 1-2023.md → enrollment_id=1 (V-30162461): 6 materias
+INFO: Extracción de inscripciones terminada: 1 documentos
+INFO: PDFs: /home/ghost/Projects/academic-records-audit/data/pdfs
+INFO: Markdown: /home/ghost/Projects/academic-records-audit/data/markdown
+INFO: Inscripción PDFs: /home/ghost/Projects/academic-records-audit/data/inscripcion
+INFO: Inscripción Markdown: /home/ghost/Projects/academic-records-audit/data/markdown-inscripcion
+INFO: Base de datos: /home/ghost/Projects/academic-records-audit/data/audit.db
+INFO: Convertido: N-30162461.pdf → N-30162461.md (6018 caracteres)
+INFO: Conversión terminada: 1/1 exitosos
+INFO: Extraído N-30162461.md → document_id=1 (matrícula 2-2021-30162461): 50 cursos
+INFO: Extracción terminada: 1 documentos
+INFO: Convertido: constancia de inscripcion 1-2023.pdf → constancia de inscripcion 1-2023.md (2926 caracteres)
+INFO: Conversión de inscripciones terminada: 1/1 exitosos
+INFO: Extraído inscripción constancia de inscripcion 1-2023.md → enrollment_id=1 (V-30162461): 6 materias
+INFO: Extracción de inscripciones terminada: 1 documentos
+INFO: Reporte generado: /home/ghost/Projects/academic-records-audit/reports/estudiantes-materias.csv (50 filas)
+INFO: Reporte generado: /home/ghost/Projects/academic-records-audit/reports/elegibilidad.csv (1 filas)

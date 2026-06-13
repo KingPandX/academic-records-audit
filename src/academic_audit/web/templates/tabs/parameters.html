@@ -1,0 +1,55 @@
+<div class="card">
+  <h3 class="card-title">Par&aacute;metros persistentes del sistema</h3>
+  <div id="param-table-wrap">
+    {% if params %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Clave</th>
+            <th>Valor</th>
+            <th>Descripci&oacute;n</th>
+            <th>Actualizado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in params %}
+          <tr>
+            <td>{{ p.key }}</td>
+            <td>{{ p.value }}</td>
+            <td>{{ p.description or "" }}</td>
+            <td>{{ p.get("updated_at", "") }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">No hay par&aacute;metros configurados</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Gestionar par&aacute;metros</h3>
+  <div class="grid-3">
+    <div class="form-group">
+      <label for="param-key">Clave</label>
+      <input type="text" id="param-key" class="form-control" placeholder="Ej: periodo_actual">
+    </div>
+    <div class="form-group">
+      <label for="param-value">Valor</label>
+      <input type="text" id="param-value" class="form-control" placeholder="Ej: 1-2025">
+    </div>
+    <div class="form-group">
+      <label for="param-desc">Descripci&oacute;n</label>
+      <input type="text" id="param-desc" class="form-control" placeholder="Descripci&oacute;n opcional">
+    </div>
+  </div>
+  <div class="btn-group">
+    <button class="btn btn-primary" id="btn-param-set">Establecer / Actualizar</button>
+    <button class="btn btn-danger" id="btn-param-delete">Eliminar</button>
+    <button class="btn" id="btn-param-refresh">Refrescar</button>
+  </div>
+  <span class="status-msg" id="log-params"></span>
+</div>

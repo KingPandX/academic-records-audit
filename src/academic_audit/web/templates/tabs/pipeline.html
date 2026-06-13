@@ -1,0 +1,58 @@
+<div class="card">
+  <h3 class="card-title">Flujo principal de procesamiento de expedientes</h3>
+  <div class="grid-2">
+    <div class="form-group">
+      <label for="pdf_dir">PDFs (expedientes)</label>
+      <input type="text" id="pdf_dir" class="form-control"
+             value="{{ paths.pdf_dir if paths else 'data/pdfs' }}">
+    </div>
+    <div class="form-group">
+      <label for="md_dir">Markdown destino (expedientes)</label>
+      <input type="text" id="md_dir" class="form-control"
+             value="{{ paths.markdown_dir if paths else 'data/markdown' }}">
+    </div>
+    <div class="form-group">
+      <label for="insc_dir">PDFs (inscripci&oacute;n)</label>
+      <input type="text" id="insc_dir" class="form-control"
+             value="{{ paths.inscripcion_dir if paths else 'data/inscripcion' }}">
+    </div>
+    <div class="form-group">
+      <label for="insc_md_dir">Markdown destino (inscripci&oacute;n)</label>
+      <input type="text" id="insc_md_dir" class="form-control"
+             value="{{ paths.inscripcion_md_dir if paths else 'data/markdown-inscripcion' }}">
+    </div>
+    <div class="form-group">
+      <label for="report_dir">Directorio de reportes</label>
+      <input type="text" id="report_dir" class="form-control"
+             value="{{ paths.report_dir if paths else 'reports' }}">
+    </div>
+    <div class="form-group">
+      <label for="workers">Hilos paralelos</label>
+      <input type="range" id="workers" class="form-control" min="1" max="8" value="3" step="1">
+      <span style="font-size:0.78rem;color:var(--text-muted)" id="workers-val">3</span>
+    </div>
+  </div>
+  <div class="btn-group" style="margin-top:0.5rem">
+    <button class="btn btn-primary" id="btn-convert">Convertir PDFs &rarr; Markdown</button>
+    <button class="btn btn-primary" id="btn-extract">Extraer Markdown &rarr; SQLite</button>
+    <button class="btn btn-primary btn-lg" id="btn-pipeline">Pipeline completo</button>
+    <button class="btn" id="btn-reports">Generar reportes CSV</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Log</h3>
+  <pre class="log-box" id="log-output"></pre>
+</div>
+
+<script>
+(function() {
+  var slider = document.getElementById("workers");
+  var valEl = document.getElementById("workers-val");
+  if (slider && valEl) {
+    slider.addEventListener("input", function() {
+      valEl.textContent = this.value;
+    });
+  }
+})();
+</script>

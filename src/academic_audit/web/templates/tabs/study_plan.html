@@ -1,0 +1,76 @@
+<div class="card">
+  <h3 class="card-title">Importar y consultar planes de estudio (pensum)</h3>
+  <div class="form-group">
+    <label for="xls-file">Archivo .xls del pensum</label>
+    <input type="file" id="xls-file" class="form-control" accept=".xls">
+  </div>
+  <div class="btn-group">
+    <button class="btn btn-primary" id="btn-import-plan">Importar plan</button>
+    <button class="btn" id="btn-refresh-programs">Refrescar programas</button>
+  </div>
+  <span class="status-msg" id="log-study-plan"></span>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Programa</h3>
+  <div class="form-group">
+    <label for="program-select">Programa</label>
+    <select id="program-select" class="form-control">
+      {% if programs %}
+        {% for p in programs %}
+        <option value="{{ p }}">{{ p }}</option>
+        {% endfor %}
+      {% else %}
+        <option value="">-- Sin programas --</option>
+      {% endif %}
+    </select>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3 class="card-title">Materias del pensum</h3>
+    <div id="subjects-table-wrap">
+      {% if programs %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>C&oacute;digo</th>
+              <th>Nombre</th>
+              <th>Cr&eacute;ditos</th>
+              <th>Semestre</th>
+              <th>Tipo</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">Importa un plan de estudios primero</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <h3 class="card-title">Prelaciones</h3>
+    <div id="prereq-table-wrap">
+      {% if programs %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Materia</th>
+              <th>Prelaci&oacute;n</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">Importa un plan de estudios primero</div>
+      {% endif %}
+    </div>
+  </div>
+</div>

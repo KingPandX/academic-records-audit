@@ -691,3 +691,70 @@ class Database:
                 "SELECT DISTINCT program FROM plan_subjects ORDER BY program"
             ).fetchall()
             return [row["program"] for row in rows]
+
+    # ── métodos de consulta para la GUI ──
+
+    def get_students(self) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT s.id, s.full_name, s.student_id, s.identity_document,
+                       s.program, s.academic_index, s.periods_completed,
+                       d.status, d.processed_at
+                FROM students s
+                JOIN documents d ON d.id = s.document_id
+                ORDER BY s.full_name
+                """
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_courses_by_student(
+        self, identity_document: str
+    ) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT c.period, c.semester, c.code, c.name, c.grade,
+                       c.credits, c.points, c.observation, c.course_type
+                FROM courses c
+                JOIN students s ON c.document_id = s.document_id
+                WHERE s.identity_document = ?
+                ORDER BY
+                    CAST(SUBSTR(c.period, INSTR(c.period, '-') + 1) AS INTEGER),
+                    CAST(SUBSTR(c.period, 1, INSTR(c.period, '-') - 1) AS INTEGER),
+                    c.semester, c.row_order
+                """,
+                (identity_document,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_enrollments(self) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT e.id, e.filename, e.identity_document, e.full_name,
+                       e.period, e.program, e.status, e.processed_at
+                FROM enrollments e
+                ORDER BY e.processed_at DESC
+                """
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_document_stats(self) -> dict[str, int]:
+        with self.connect() as conn:
+            total = conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()
+            converted = conn.execute(
+                "SELECT COUNT(*) AS c FROM documents WHERE status = 'converted'"
+            ).fetchone()
+            extracted = conn.execute(
+                "SELECT COUNT(*) AS c FROM documents WHERE status = 'extracted'"
+            ).fetchone()
+            failed = conn.execute(
+                "SELECT COUNT(*) AS c FROM documents WHERE status LIKE '%fail%'"
+            ).fetchone()
+            return {
+                "total": total["c"] if total else 0,
+                "converted": converted["c"] if converted else 0,
+                "extracted": extracted["c"] if extracted else 0,
+                "failed": failed["c"] if failed else 0,
+            }

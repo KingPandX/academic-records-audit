@@ -1,0 +1,39 @@
+<div class="card">
+  <h3 class="card-title">Evaluaci&oacute;n de elegibilidad (Art&iacute;culo 118)</h3>
+  <div class="row">
+    <div class="col-3 form-group">
+      <label for="identity-input">C&eacute;dula / Identidad del estudiante</label>
+      <input type="text" id="identity-input" class="form-control"
+             placeholder="Ej: V-12345678 (con V- si aplica)">
+    </div>
+    <div class="col-1 form-group">
+      <label for="period-input">Per&iacute;odo actual</label>
+      <input type="text" id="period-input" class="form-control"
+             placeholder="Ej: 1-2025">
+    </div>
+  </div>
+  <button class="btn btn-primary btn-lg" id="btn-evaluate">Evaluar estudiante</button>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="md-text" id="veredict">
+      <h3>⏳ Esperando evaluaci&oacute;n...</h3>
+    </div>
+    <div class="md-text" id="student-info"></div>
+  </div>
+  <div class="card">
+    <h3 class="card-title">Materias cursadas</h3>
+    <div id="courses-table-wrap">
+      <div class="empty-state">Realiza una evaluaci&oacute;n primero</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="md-text" id="art118-output"></div>
+</div>
+
+<div class="card">
+  <div class="md-text" id="prereq-output"></div>
+</div>

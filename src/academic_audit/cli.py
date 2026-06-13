@@ -131,6 +131,48 @@ def _build_parser() -> argparse.ArgumentParser:
     plan_list = plan_sub.add_parser("list", help="Listar programas importados")
     plan_list.add_argument("--program", help="Filtrar por programa")
 
+    # ---  subcomando gui  ---
+    gui_parser = sub.add_parser(
+        "gui",
+        help="Interfaz gráfica (Gradio)",
+    )
+    gui_parser.add_argument(
+        "--db",
+        type=Path,
+        default=None,
+        help="Base de datos SQLite a utilizar",
+    )
+    gui_parser.add_argument(
+        "--port",
+        type=int,
+        default=7860,
+        help="Puerto para la interfaz web (default: 7860)",
+    )
+
+    # ---  subcomando serve  ---
+    serve_parser = sub.add_parser(
+        "serve",
+        help="Interfaz web (FastAPI)",
+    )
+    serve_parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host (default: 127.0.0.1)",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Puerto (default: 8000)",
+    )
+    serve_parser.add_argument(
+        "--db",
+        type=Path,
+        default=None,
+        help="Base de datos SQLite a utilizar",
+    )
+
     return parser
 
 
@@ -235,6 +277,18 @@ def main(argv: list[str] | None = None) -> int:
         paths = _paths_from_args(args)
         Database(paths.db_path, memory=False).init_schema()
         print(f"Base de datos inicializada: {paths.db_path}")
+        return 0
+
+    if args.command == "gui":
+        from academic_audit.gui import launch
+
+        launch(db_path=args.db, port=args.port)
+        return 0
+
+    if args.command == "serve":
+        from academic_audit.web.app import run
+
+        run(host=args.host, port=args.port, db_path=args.db)
         return 0
 
     paths = _paths_from_args(args)

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Records Audit</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>Academic Records Audit</h1>
+      <p>Procesamiento y consulta de expedientes acad&eacute;micos</p>
+    </header>
+
+    <nav class="tabs-nav" id="tabs-nav">
+      <button class="tab-btn active" data-tab="pipeline">Pipeline</button>
+      <button class="tab-btn" data-tab="study_plan">Plan de Estudios</button>
+      <button class="tab-btn" data-tab="parameters">Par&aacute;metros</button>
+      <button class="tab-btn" data-tab="eligibility">Elegibilidad</button>
+    </nav>
+
+    <main id="tab-content" class="tab-content">
+      {% include "tabs/pipeline.html" %}
+    </main>
+
+    <footer class="footer">
+      <div class="footer-content">
+        <span class="footer-db">
+          <strong>DB</strong>
+          <code>{{ db_path }}</code>
+        </span>
+        <span class="footer-hint">academic-audit --help para uso avanzado</span>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="chk-delete-db">
+        <label for="chk-delete-db">Borrar BD al cerrar</label>
+      </div>
+      <div class="checkbox-info">Elimina permanentemente {{ db_path.name }} al salir (ventana actual)</div>
+      <div class="row">
+        <button class="btn btn-danger btn-sm" id="btn-delete-db">Eliminar ahora</button>
+        <span class="status-msg" id="db-status"></span>
+      </div>
+    </footer>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
