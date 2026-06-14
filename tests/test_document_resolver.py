@@ -46,6 +46,7 @@ def test_ensure_document_links_markdown_to_pdf(tmp_path: Path) -> None:
 def test_find_document_by_filename_when_markdown_path_differs(tmp_path: Path) -> None:
     db_path = tmp_path / "test.db"
     conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
     conn.executescript(
         """
         CREATE TABLE documents (

@@ -80,6 +80,12 @@ function initTabHandlers(tabName) {
     case "eligibility":
       initEligibilityTab();
       break;
+    case "query":
+      initQueryTab();
+      break;
+    case "reports":
+      initReportsTab();
+      break;
   }
 }
 
@@ -434,6 +440,303 @@ function renderMarkdown(text) {
     .replace(/_([^_]+)_/g, "<em>$1</em>")
     .replace(/\n/g, "<br>");
   return html;
+}
+
+// ── Query Tab (AI) ──
+
+function initQueryTab() {
+  var askBtn = document.getElementById("btn-ask-query");
+  var clearBtn = document.getElementById("btn-clear-query");
+  var saveKeyBtn = document.getElementById("btn-save-key");
+  var deleteKeyBtn = document.getElementById("btn-delete-key");
+  var input = document.getElementById("query-input");
+  var model = document.getElementById("query-model");
+  var apiKey = document.getElementById("query-api-key");
+  var keyStatus = document.getElementById("key-status");
+
+  // Check saved key status on load
+  fetch("/api/query/key-status")
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (keyStatus) {
+        keyStatus.textContent = data.configured
+          ? "✅ API key guardada en par\u00e1metros"
+          : "💡 Sin API key guardada. Ingres\u00e1 una o us\u00e1 GROQ_API_KEY";
+      }
+    });
+
+  // Save API key
+  if (saveKeyBtn && apiKey) {
+    saveKeyBtn.addEventListener("click", function () {
+      if (!apiKey.value.trim()) {
+        showQueryMsg("Escrib\u00ed la API key primero");
+        return;
+      }
+      var fd = new FormData();
+      fd.append("api_key", apiKey.value);
+      saveKeyBtn.disabled = true;
+      fetch("/api/query/save-key", { method: "POST", body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          showQueryMsg(data.message);
+          if (keyStatus) keyStatus.textContent = "✅ API key guardada en par\u00e1metros";
+          apiKey.value = "";
+          saveKeyBtn.disabled = false;
+        })
+        .catch(function () { saveKeyBtn.disabled = false; });
+    });
+  }
+
+  // Delete API key
+  if (deleteKeyBtn) {
+    deleteKeyBtn.addEventListener("click", function () {
+      deleteKeyBtn.disabled = true;
+      fetch("/api/query/delete-key", { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          showQueryMsg(data.message);
+          if (keyStatus) keyStatus.textContent = "💡 Sin API key guardada. Ingres\u00e1 una o us\u00e1 GROQ_API_KEY";
+          deleteKeyBtn.disabled = false;
+        })
+        .catch(function () { deleteKeyBtn.disabled = false; });
+    });
+  }
+
+  // Ask query
+  if (askBtn && input) {
+    askBtn.addEventListener("click", function () {
+      if (!input.value.trim()) {
+        showQueryMsg("Escribe una pregunta");
+        return;
+      }
+
+      var sqlCard = document.getElementById("query-sql-card");
+      var sqlOut = document.getElementById("query-sql-output");
+      var resultsCard = document.getElementById("query-results-card");
+      var resultsOut = document.getElementById("query-results-output");
+      var rowCount = document.getElementById("query-row-count");
+
+      if (sqlCard) sqlCard.style.display = "none";
+      if (resultsCard) resultsCard.style.display = "none";
+      if (sqlOut) sqlOut.textContent = "";
+      if (resultsOut) resultsOut.textContent = "";
+      if (rowCount) rowCount.textContent = "";
+
+      askBtn.disabled = true;
+      askBtn.textContent = "⏳ Consultando IA...";
+      showQueryMsg("");
+
+      var formData = new FormData();
+      formData.append("question", input.value);
+      formData.append("model", model ? model.value : "qwen-2.5-coder-32b");
+      formData.append("api_key", apiKey ? apiKey.value : "");
+
+      fetch("/api/query/ask", {
+        method: "POST",
+        body: formData,
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          askBtn.disabled = false;
+          askBtn.textContent = "Consultar";
+
+          if (data.error) {
+            showQueryMsg("❌ " + data.error);
+            if (data.sql && sqlCard && sqlOut) {
+              sqlCard.style.display = "block";
+              sqlOut.textContent = data.sql;
+            }
+            return;
+          }
+
+          if (data.sql && sqlCard && sqlOut) {
+            sqlCard.style.display = "block";
+            sqlOut.textContent = data.sql;
+          }
+
+          if (data.results && resultsCard && resultsOut) {
+            resultsCard.style.display = "block";
+            resultsOut.textContent = data.results;
+            if (rowCount && data.row_count != null) {
+              rowCount.textContent = "(" + data.row_count + " filas)";
+            }
+          }
+        })
+        .catch(function (err) {
+          askBtn.disabled = false;
+          askBtn.textContent = "Consultar";
+          showQueryMsg("❌ Error de conexión: " + err.message);
+        });
+    });
+  }
+
+  // Clear
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function () {
+      if (input) input.value = "";
+      var sqlCard = document.getElementById("query-sql-card");
+      var sqlOut = document.getElementById("query-sql-output");
+      var resultsCard = document.getElementById("query-results-card");
+      var resultsOut = document.getElementById("query-results-output");
+      var rowCount = document.getElementById("query-row-count");
+      if (sqlCard) sqlCard.style.display = "none";
+      if (resultsCard) resultsCard.style.display = "none";
+      if (sqlOut) sqlOut.textContent = "";
+      if (resultsOut) resultsOut.textContent = "";
+      if (rowCount) rowCount.textContent = "";
+      showQueryMsg("");
+    });
+  }
+}
+
+function showQueryMsg(msg) {
+  var el = document.getElementById("log-query");
+  if (el) el.textContent = msg;
+}
+
+// ── Reports Tab ──
+
+function initReportsTab() {
+  loadReportsList();
+}
+
+function loadReportsList() {
+  var listEl = document.getElementById("reports-list");
+  if (!listEl) return;
+
+  listEl.innerHTML = '<div class="loading" style="padding:1rem">Cargando reportes...</div>';
+
+  fetch("/api/reports/list")
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.reports || !data.reports.length) {
+        listEl.innerHTML = '<div class="empty-state">No hay reportes registrados</div>';
+        return;
+      }
+
+      var html = "";
+      data.reports.forEach(function (rep) {
+        var statusIcon = rep.exists ? "✅" : "⏳";
+        var sizeInfo = rep.exists ? rep.size_human + " · " + formatDate(rep.modified) : "No generado";
+        var genDisabled = rep.exists ? "" : "disabled";
+        var previewDisabled = "";
+
+        html += '<div class="report-item card">';
+        html += '  <div class="report-info">';
+        html += '    <strong class="report-label">' + rep.label + '</strong>';
+        html += '    <code class="report-filename">' + rep.filename + '</code>';
+        html += '    <span class="report-status">' + statusIcon + " " + sizeInfo + "</span>";
+        html += '  </div>';
+        html += '  <div class="report-actions">';
+        html += '    <button class="btn btn-sm btn-generate" data-name="' + rep.name + '">🔄 Generar</button>';
+        html += '    <button class="btn btn-sm btn-preview" data-name="' + rep.name + '">👁 Vista previa</button>';
+        html += '    <a class="btn btn-sm" href="/api/reports/download/' + rep.name + '" download ' + previewDisabled + '>⬇ Descargar</a>';
+        html += '  </div>';
+        html += '</div>';
+      });
+
+      listEl.innerHTML = html;
+
+      // Bind generate buttons
+      listEl.querySelectorAll(".btn-generate").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var name = btn.getAttribute("data-name");
+          generateReport(name, btn);
+        });
+      });
+
+      // Bind preview buttons
+      listEl.querySelectorAll(".btn-preview").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var name = btn.getAttribute("data-name");
+          previewReport(name);
+        });
+      });
+    })
+    .catch(function (err) {
+      listEl.innerHTML = '<div class="empty-state">Error: ' + err.message + "</div>";
+    });
+}
+
+function generateReport(name, btn) {
+  btn.disabled = true;
+  btn.textContent = "⏳ Generando...";
+
+  fetch("/api/reports/generate/" + name, { method: "POST" })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      btn.textContent = "✅ Generado";
+      setTimeout(function () {
+        btn.textContent = "🔄 Generar";
+        btn.disabled = false;
+        loadReportsList();
+      }, 2000);
+    })
+    .catch(function (err) {
+      btn.textContent = "❌ Error";
+      btn.disabled = false;
+    });
+}
+
+function previewReport(name) {
+  var section = document.getElementById("report-preview-section");
+  var filenameEl = document.getElementById("preview-filename");
+  var wrap = document.getElementById("preview-table-wrap");
+
+  if (!section || !filenameEl || !wrap) return;
+
+  section.style.display = "block";
+  filenameEl.textContent = name;
+  wrap.innerHTML = '<div class="loading" style="padding:1rem">Cargando vista previa...</div>';
+
+  fetch("/api/reports/preview/" + name)
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) {
+        wrap.innerHTML = '<div class="empty-state">' + data.error + "</div>";
+        return;
+      }
+
+      if (!data.headers || !data.headers.length) {
+        wrap.innerHTML = '<div class="empty-state">Reporte vacío</div>';
+        return;
+      }
+
+      filenameEl.textContent = data.filename;
+
+      var html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+      data.headers.forEach(function (h) {
+        html += "<th>" + escapeHtml(h) + "</th>";
+      });
+      html += "</tr></thead><tbody>";
+
+      data.rows.forEach(function (row) {
+        html += "<tr>";
+        row.forEach(function (cell) {
+          html += "<td>" + escapeHtml(cell != null ? cell : "") + "</td>";
+        });
+        html += "</tr>";
+      });
+
+      html += "</tbody></table></div>";
+      html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-muted)">' + data.rows.length + " filas</div>";
+      wrap.innerHTML = html;
+    })
+    .catch(function (err) {
+      wrap.innerHTML = '<div class="empty-state">Error: ' + err.message + "</div>";
+    });
+}
+
+function formatDate(timestamp) {
+  if (!timestamp) return "";
+  var d = new Date(timestamp * 1000);
+  return d.toLocaleDateString("es-VE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function escapeHtml(text) {
+  var div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 function buildCoursesTable(courses) {

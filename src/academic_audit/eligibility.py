@@ -15,8 +15,8 @@ def _is_passed(course: dict[str, Any]) -> bool:
 
 
 def _is_failed(course: dict[str, Any]) -> bool:
-    grade = course.get("grade", "")
-    obs = course.get("observation", "")
+    grade = str(course.get("grade") or "")
+    obs = str(course.get("observation") or "")
     try:
         return int(grade) < 10
     except (ValueError, TypeError):
@@ -32,8 +32,7 @@ def get_student_courses(db: Database, identity_document: str) -> list[dict[str, 
                 """
                 SELECT c.*
                 FROM courses c
-                JOIN students s ON c.document_id = s.document_id
-                WHERE s.identity_document = ?
+                WHERE c.identity_document = ?
                 """,
                 (identity_document,),
             ).fetchall()

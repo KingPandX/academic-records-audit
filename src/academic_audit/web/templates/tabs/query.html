@@ -1,0 +1,49 @@
+<div class="card">
+  <h3 class="card-title">Consultas en lenguaje natural con IA</h3>
+  <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:1rem">
+    Hac&eacute; preguntas sobre los datos en espa&ntilde;ol.
+    La IA genera SQL, lo ejecuta y muestra los resultados.
+  </p>
+  <div class="form-group">
+    <label for="query-input">Pregunta</label>
+    <input type="text" id="query-input" class="form-control"
+           placeholder="Ej: cuantos estudiantes hay por carrera">
+  </div>
+  <div class="grid-2">
+    <div class="form-group">
+      <label for="query-model">Modelo</label>
+      <select id="query-model" class="form-control">
+        <option value="qwen-2.5-coder-32b">Qwen 2.5 Coder 32B</option>
+        <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+        <option value="llama-3.1-8b-instant">Llama 3.1 8B (r&aacute;pido)</option>
+        <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+        <option value="gemma2-9b-it">Gemma 2 9B</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="query-api-key">API Key</label>
+      <div class="row" style="align-items:start">
+        <input type="password" id="query-api-key" class="form-control"
+               placeholder="gsk_... (opcional si ya guardaste una)" style="flex:1">
+        <button class="btn btn-sm" id="btn-save-key" title="Guardar en par&aacute;metros">💾 Guardar</button>
+        <button class="btn btn-sm btn-danger" id="btn-delete-key" title="Eliminar key guardada">🗑 Eliminar</button>
+      </div>
+      <span class="checkbox-info" id="key-status"></span>
+    </div>
+  </div>
+  <div class="btn-group">
+    <button class="btn btn-primary btn-lg" id="btn-ask-query">Consultar</button>
+    <button class="btn" id="btn-clear-query">Limpiar</button>
+  </div>
+  <span class="status-msg" id="log-query"></span>
+</div>
+
+<div class="card" id="query-sql-card" style="display:none">
+  <h3 class="card-title">SQL generado</h3>
+  <pre class="log-box" id="query-sql-output" style="min-height:60px;max-height:120px;font-size:0.85rem;color:var(--accent)"></pre>
+</div>
+
+<div class="card" id="query-results-card" style="display:none">
+  <h3 class="card-title">Resultados <span id="query-row-count" style="font-weight:400;font-size:0.8rem;color:var(--text-muted)"></span></h3>
+  <pre class="log-box" id="query-results-output" style="min-height:120px;max-height:480px;white-space:pre;font-size:0.78rem"></pre>
+</div>

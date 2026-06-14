@@ -173,6 +173,36 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Base de datos SQLite a utilizar",
     )
 
+    # ---  subcomando query  ---
+    query_parser = sub.add_parser(
+        "query",
+        help="Consultas en lenguaje natural con IA",
+    )
+    query_parser.add_argument(
+        "question",
+        nargs="?",
+        default=None,
+        help="Pregunta en lenguaje natural (modo one-shot)",
+    )
+    query_parser.add_argument(
+        "--db",
+        type=Path,
+        default=None,
+        help="Base de datos SQLite (defecto: data/audit.db)",
+    )
+    query_parser.add_argument(
+        "--model",
+        type=str,
+        default="qwen-2.5-coder-32b",
+        help="Modelo Groq (defecto: qwen-2.5-coder-32b)",
+    )
+    query_parser.add_argument(
+        "--api-key",
+        type=str,
+        default=None,
+        help="API key de Groq (alternativa a GROQ_API_KEY env)",
+    )
+
     return parser
 
 
@@ -289,6 +319,30 @@ def main(argv: list[str] | None = None) -> int:
         from academic_audit.web.app import run
 
         run(host=args.host, port=args.port, db_path=args.db)
+        return 0
+
+    if args.command == "query":
+        from academic_audit.query import interactive_loop, single_query
+
+        qdb_path = args.db or (Path.cwd() / "data" / "audit.db")
+        qdb = Database(qdb_path, memory=False)
+        qdb.init_schema()
+        try:
+            if args.question:
+                single_query(
+                    qdb,
+                    question=args.question,
+                    model=args.model,
+                    api_key=args.api_key,
+                )
+            else:
+                interactive_loop(
+                    qdb,
+                    model=args.model,
+                    api_key=args.api_key,
+                )
+        finally:
+            qdb.close()
         return 0
 
     paths = _paths_from_args(args)

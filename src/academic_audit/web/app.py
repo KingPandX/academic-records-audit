@@ -7,7 +7,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Form, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -20,8 +20,9 @@ from academic_audit.eligibility import (
 )
 from academic_audit.extract import extract_folder as _extract_folder
 from academic_audit.pipeline import run_pipeline as _run_pipeline
-from academic_audit.report import generate_reports as _generate_reports
+from academic_audit.report import REGISTRY as _REPORT_REGISTRY, generate_reports as _generate_reports
 from academic_audit.study_plan import parse_xls as _parse_xls
+from academic_audit.query import ask_query as _ask_query
 from academic_audit.web.tasks import TaskManager
 
 logger = logging.getLogger(__name__)
@@ -506,6 +507,171 @@ def api_db_info() -> JSONResponse:
             "name": _GUI_DB_PATH.name,
         }
     )
+
+
+# ── Query API ──
+
+
+_GROQ_API_KEY_PARAM = "groq_api_key"
+
+
+def _get_saved_api_key(db: Database) -> str | None:
+    return db.get_parameter(_GROQ_API_KEY_PARAM)
+
+
+@app.post("/api/query/ask")
+def api_query_ask(
+    question: str = Form(""),
+    model: str = Form("qwen-2.5-coder-32b"),
+    api_key: str | None = Form(None),
+) -> JSONResponse:
+    if not question.strip():
+        return JSONResponse(
+            {"sql": None, "results": None, "error": "Escribe una pregunta"}
+        )
+
+    db = _open_db()
+    try:
+        key = api_key or _get_saved_api_key(db) or None
+        result = _ask_query(db, question.strip(), model, key)
+        return JSONResponse(result)
+    finally:
+        db.close()
+
+
+@app.post("/api/query/save-key")
+def api_query_save_key(api_key: str = Form("")) -> JSONResponse:
+    if not api_key.strip():
+        return JSONResponse({"message": "API key vacía, no se guardó"})
+    db = _open_db()
+    try:
+        db.set_parameter(
+            _GROQ_API_KEY_PARAM,
+            api_key.strip(),
+            description="API Key de Groq para consultas IA",
+        )
+        return JSONResponse({"message": "API key guardada en parámetros"})
+    finally:
+        db.close()
+
+
+@app.post("/api/query/delete-key")
+def api_query_delete_key() -> JSONResponse:
+    db = _open_db()
+    try:
+        if db.delete_parameter(_GROQ_API_KEY_PARAM):
+            return JSONResponse({"message": "API key eliminada"})
+        return JSONResponse({"message": "No hay API key guardada"})
+    finally:
+        db.close()
+
+
+@app.get("/api/query/key-status")
+def api_query_key_status() -> JSONResponse:
+    db = _open_db()
+    try:
+        key = _get_saved_api_key(db)
+        return JSONResponse({"configured": key is not None})
+    finally:
+        db.close()
+
+
+# ── Reports API ──
+
+_REPORT_DIR = Path.cwd() / "reports"
+
+
+@app.get("/api/reports/list")
+def api_reports_list() -> JSONResponse:
+    report_dir = _REPORT_DIR
+    report_dir.mkdir(parents=True, exist_ok=True)
+    reports: list[dict[str, Any]] = []
+    for name, cls in _REPORT_REGISTRY.items():
+        r = cls()
+        fp = report_dir / r.filename
+        info: dict[str, Any] = {
+            "name": name,
+            "filename": r.filename,
+            "label": r.label,
+            "exists": fp.exists(),
+        }
+        if fp.exists():
+            s = fp.stat()
+            info["size"] = s.st_size
+            info["size_human"] = _human_size(s.st_size)
+            info["modified"] = s.st_mtime
+        else:
+            info["size"] = 0
+            info["size_human"] = ""
+            info["modified"] = None
+        reports.append(info)
+    return JSONResponse({"reports": reports})
+
+
+@app.post("/api/reports/generate/{report_name}")
+def api_reports_generate(report_name: str) -> JSONResponse:
+    if report_name != "all" and report_name not in _REPORT_REGISTRY:
+        return JSONResponse(
+            {"message": f"Reporte '{report_name}' no encontrado"}, status_code=404
+        )
+    db = _open_db()
+    try:
+        names = None if report_name == "all" else [report_name]
+        paths = _generate_reports(db, _REPORT_DIR, report_names=names)
+        return JSONResponse({
+            "message": f"{len(paths)} reporte(s) generado(s)",
+            "files": [p.name for p in paths],
+        })
+    finally:
+        db.close()
+
+
+@app.get("/api/reports/preview/{report_name}")
+def api_reports_preview(report_name: str) -> JSONResponse:
+    cls = _REPORT_REGISTRY.get(report_name)
+    if not cls:
+        return JSONResponse({"error": "Reporte no encontrado"}, status_code=404)
+
+    report = cls()
+    fp = _REPORT_DIR / report.filename
+
+    if not fp.exists():
+        db = _open_db()
+        try:
+            report.write(db, _REPORT_DIR)
+        finally:
+            db.close()
+
+    if not fp.exists():
+        return JSONResponse({"headers": [], "rows": [], "message": "No se pudo generar el reporte"})
+
+    import csv
+    with fp.open(newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+    headers = rows[0] if rows else []
+    data = rows[1:] if len(rows) > 1 else []
+    return JSONResponse({"headers": headers, "rows": data, "filename": report.filename})
+
+
+@app.get("/api/reports/download/{report_name}", response_model=None)
+def api_reports_download(report_name: str):
+    cls = _REPORT_REGISTRY.get(report_name)
+    if not cls:
+        return JSONResponse({"error": "Reporte no encontrado"}, status_code=404)
+    report = cls()
+    fp = _REPORT_DIR / report.filename
+    if not fp.exists():
+        return JSONResponse({"error": "Reporte no generado"}, status_code=404)
+    return FileResponse(fp, media_type="text/csv", filename=report.filename)
+
+
+def _human_size(size: int) -> str:
+    for unit in ("B", "KB", "MB"):
+        if size < 1024:
+            return f"{size:.0f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
 
 
 # ── Run ──

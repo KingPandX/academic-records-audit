@@ -481,6 +481,48 @@ input[type="range"] {
   color: var(--text-muted);
 }
 
+/* ── Report Items (Reports Tab) ── */
+
+.report-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.report-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 200px;
+}
+
+.report-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.report-filename {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.report-status {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.report-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 /* ── Empty State ── */
 
 .empty-state {

@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS students (
     given_names TEXT,
     full_name TEXT,
     student_id TEXT,
-    identity_document TEXT,
+    identity_document TEXT NOT NULL,
     program TEXT,
     study_plan_period INTEGER,
     periods_completed INTEGER,
@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS courses (
     year TEXT,
     row_order INTEGER,
     source_line TEXT,
+    identity_document TEXT NOT NULL,
     FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 
@@ -134,6 +135,7 @@ _COURSE_COLUMNS = (
     ("observation", "TEXT"),
     ("course_type", "TEXT"),
     ("student_id", "TEXT"),
+    ("identity_document", "TEXT"),
 )
 
 _ENROLLMENT_COLUMNS = (
@@ -255,6 +257,29 @@ class Database:
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_courses_student ON courses(student_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_courses_identity ON courses(identity_document)"
+        )
+        conn.execute("DROP INDEX IF EXISTS idx_students_identity_document")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_students_identity_document "
+            "ON students(identity_document)"
+        )
+        # Backfill: copy identity_document from students to courses for existing records
+        conn.execute(
+            """
+            UPDATE courses SET identity_document = (
+                SELECT identity_document FROM students
+                WHERE students.document_id = courses.document_id
+            )
+            WHERE courses.identity_document IS NULL
+            AND EXISTS (
+                SELECT 1 FROM students
+                WHERE students.document_id = courses.document_id
+                AND students.identity_document IS NOT NULL
+            )
+            """
         )
 
         conn.execute(
@@ -417,8 +442,13 @@ class Database:
         extra_fields: dict[str, str],
         index_snapshots: list[dict[str, Any]] | None = None,
     ) -> None:
+        identity = student.get("identity_document")
+        if not identity:
+            raise ValueError(
+                "save_extraction requiere identity_document"
+            )
+
         with self.connect() as conn:
-            conn.execute("DELETE FROM students WHERE document_id = ?", (document_id,))
             conn.execute("DELETE FROM courses WHERE document_id = ?", (document_id,))
             conn.execute(
                 "DELETE FROM document_fields WHERE document_id = ?", (document_id,)
@@ -429,12 +459,30 @@ class Database:
             )
 
             conn.execute(
+                "DELETE FROM students WHERE document_id = ? AND identity_document != ?",
+                (document_id, identity),
+            )
+            conn.execute(
                 """
                 INSERT INTO students (
                     document_id, surnames, given_names, full_name, student_id,
                     identity_document, program, study_plan_period, periods_completed,
                     nucleus, academic_index, issue_date, faculty, gpa
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(identity_document) DO UPDATE SET
+                    document_id = excluded.document_id,
+                    surnames = excluded.surnames,
+                    given_names = excluded.given_names,
+                    full_name = excluded.full_name,
+                    student_id = COALESCE(excluded.student_id, students.student_id),
+                    program = excluded.program,
+                    study_plan_period = excluded.study_plan_period,
+                    periods_completed = excluded.periods_completed,
+                    nucleus = excluded.nucleus,
+                    academic_index = excluded.academic_index,
+                    issue_date = excluded.issue_date,
+                    faculty = excluded.faculty,
+                    gpa = excluded.gpa
                 """,
                 (
                     document_id,
@@ -442,7 +490,7 @@ class Database:
                     student.get("given_names"),
                     student.get("full_name"),
                     student.get("student_id"),
-                    student.get("identity_document"),
+                    identity,
                     student.get("program"),
                     student.get("study_plan_period"),
                     student.get("periods_completed"),
@@ -454,8 +502,6 @@ class Database:
                 ),
             )
 
-            student_id = student.get("student_id")
-
             for order, course in enumerate(courses, start=1):
                 credits = course.get("credits")
                 points = course.get("points")
@@ -464,12 +510,12 @@ class Database:
                     INSERT INTO courses (
                         document_id, student_id, period, semester, code, name, grade,
                         credits, points, observation, course_type, year,
-                        row_order, source_line
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        row_order, source_line, identity_document
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         document_id,
-                        student_id,
+                        student.get("student_id"),
                         course.get("period"),
                         course.get("semester"),
                         course.get("code"),
@@ -482,6 +528,7 @@ class Database:
                         course.get("year"),
                         order,
                         course.get("source_line"),
+                        identity,
                     ),
                 )
 
@@ -717,8 +764,7 @@ class Database:
                 SELECT c.period, c.semester, c.code, c.name, c.grade,
                        c.credits, c.points, c.observation, c.course_type
                 FROM courses c
-                JOIN students s ON c.document_id = s.document_id
-                WHERE s.identity_document = ?
+                WHERE c.identity_document = ?
                 ORDER BY
                     CAST(SUBSTR(c.period, INSTR(c.period, '-') + 1) AS INTEGER),
                     CAST(SUBSTR(c.period, 1, INSTR(c.period, '-') - 1) AS INTEGER),

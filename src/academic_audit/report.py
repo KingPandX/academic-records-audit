@@ -20,6 +20,10 @@ class ReportWriter(ABC):
     @abstractmethod
     def columns(self) -> list[str]: ...
 
+    @property
+    def label(self) -> str:
+        return self.filename.replace(".csv", "").replace("-", " ").title()
+
     @abstractmethod
     def query_data(self, db: Database) -> list[dict[str, Any]]: ...
 
@@ -38,6 +42,10 @@ class ReportWriter(ABC):
 
 class StudentCoursesReport(ReportWriter):
     filename = "estudiantes-materias.csv"
+
+    @property
+    def label(self) -> str:
+        return "Materias por Estudiante"
 
     @property
     def columns(self) -> list[str]:
@@ -64,6 +72,10 @@ class StudentCoursesReport(ReportWriter):
 
 class EligibilityReport(ReportWriter):
     filename = "elegibilidad.csv"
+
+    @property
+    def label(self) -> str:
+        return "Elegibilidad (Art. 118)"
 
     @property
     def columns(self) -> list[str]:
@@ -141,9 +153,28 @@ class EligibilityReport(ReportWriter):
         return results
 
 
+class StudentStatsReport(ReportWriter):
+    filename = "estadisticas-carreras.csv"
+
+    @property
+    def label(self) -> str:
+        return "Estadísticas por Carreras"
+
+    @property
+    def columns(self) -> list[str]:
+        from academic_audit.student_stats import SEMESTER_LABELS
+        return ["Carrera", "Tipo", *SEMESTER_LABELS]
+
+    def query_data(self, db: Database) -> list[dict[str, Any]]:
+        from academic_audit.student_stats import compute_stats_pivot
+        current_period = db.get_parameter("periodo_actual") or ""
+        return compute_stats_pivot(db, current_period)
+
+
 REGISTRY: dict[str, type[ReportWriter]] = {
     "student_courses": StudentCoursesReport,
     "eligibility": EligibilityReport,
+    "student_stats": StudentStatsReport,
 }
 
 
